@@ -21,9 +21,20 @@ services:
     rootDir: backend
     branch: main
     autoDeploy: true
-    # Prisma's client must be generated before TypeScript compiles, because the
-    # generated types are what tsc checks against.
-    buildCommand: npm install && npx prisma generate && npm run build
+    # Build notes, in order of importance:
+    #
+    # 1. `--include=dev` is REQUIRED. render.yaml sets NODE_ENV=production, and
+    #    Render applies environment variables during the build as well as at
+    #    runtime. With NODE_ENV=production, plain `npm install` omits
+    #    devDependencies - which is where prisma and typescript live - so
+    #    `prisma generate` and `tsc` would not exist and the build would fail.
+    # 2. `npm ci` installs exactly what package-lock.json pins.
+    # 3. Prisma's client must be generated before TypeScript compiles, because
+    #    the generated types are what tsc checks against.
+    # 4. Migrations are deliberately NOT run here, so a deploy cannot silently
+    #    alter production data. Run `npm run db:migrate` yourself when the
+    #    schema changes.
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
