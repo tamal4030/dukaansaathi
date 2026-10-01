@@ -10,7 +10,13 @@ services:
   - type: web
     name: dukaansaathi-api
     runtime: node
-    plan: starter
+    # `free` is Render's free instance type. `starter` is a PAID plan.
+    # Free instances spin down after ~15 minutes of inactivity and take about
+    # 50 seconds to wake, so the first request after a quiet period is slow.
+    plan: free
+    # Singapore is the closest Render region to Indian users. Supabase lives in
+    # ap-southeast-2 (Sydney); change this to `sydney` if you would rather have
+    # faster database round trips than faster page loads.
     region: singapore
     rootDir: backend
     branch: main

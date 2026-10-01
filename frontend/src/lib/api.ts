@@ -22,6 +22,21 @@ import type {
 const RAW_BASE = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
 const BASE = RAW_BASE === '' ? '/api' : RAW_BASE;
 
+/**
+ * In local development the Vite proxy forwards /api to the backend, so the
+ * relative default works. In a deployed build there is no proxy: /api would hit
+ * the static host, return index.html, and surface as a confusing JSON parse
+ * error. Say so plainly instead.
+ */
+if (import.meta.env.PROD && (RAW_BASE === '/api' || RAW_BASE === '')) {
+  console.error(
+    '[config] VITE_API_BASE_URL is not set for this build. The app will call ' +
+      '"/api" on the static host, which will not reach the API. Set it to the ' +
+      'deployed backend URL including /api, for example ' +
+      'https://your-service.onrender.com/api, then redeploy.',
+  );
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };
 }
