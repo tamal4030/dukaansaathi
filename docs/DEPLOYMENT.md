@@ -317,6 +317,103 @@ them explicitly or they will be blocked.
 7. Google sign-in works and an order can be placed.
 8. Voice input works if `SARVAM_API_KEY_*` is set.
 
+## 12. Free-plan deployment walkthrough (Vercel Hobby + Render Free)
+
+This is the exact order to deploy on free plans. The order matters: Render's URL
+is needed by Vercel, and Vercel's URL is needed back on Render.
+
+### Before you start
+
+- `render.yaml` uses `plan: free`. The `starter` plan is paid, so do not change it
+  back unless you intend to be billed.
+- **`DIRECT_URL` must be set on Render before the first build.** Render runs
+  `npx prisma generate` during the build, and Prisma refuses to load the schema
+  when the direct URL is empty (error P1012). A missing `DIRECT_URL` fails the
+  build, not just the migration step.
+- The database is already migrated. Migrations are deliberately not run
+  automatically on deploy, so a deploy cannot alter production data.
+
+### Step 1 - Render (the API)
+
+1. render.com -> **New +** -> **Blueprint** -> connect the GitHub repo.
+   Render reads `render.yaml` and shows the service it will create.
+2. It will prompt for every variable marked `sync: false`. Supply:
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | Supabase -> Settings -> Database -> **Pooled** (port 6543), keep `?pgbouncer=true&connection_limit=10&pool_timeout=20` |
+   | `DIRECT_URL` | Supabase -> Settings -> Database -> **Direct** (port 5432). Must be non-empty. |
+   | `SUPABASE_URL` | Supabase -> Settings -> API -> Project URL |
+   | `SUPABASE_ANON_KEY` | Supabase -> Settings -> API -> anon public |
+   | `FRONTEND_URL` | put a placeholder for now, e.g. `https://example.com`. Corrected in step 3. |
+   | `CORS_ALLOWED_ORIGINS` | same placeholder for now |
+   | `DEEPSEEK_API_KEY` | platform.deepseek.com |
+   | `DEEPSEEK_MODEL` | `deepseek-flash` |
+   | `SARVAM_API_KEY_1..3` | dashboard.sarvam.ai |
+   | `RESEND_API_KEY`, `EMAIL_FROM` | optional; leave blank to disable email |
+
+3. Wait for the deploy. Then check `https://<your-service>.onrender.com/api/health`
+   returns `{"status":"ok"}`.
+
+   The first request after ~15 minutes of inactivity takes about **50 seconds**
+   because free instances spin down. This is normal on the free plan.
+
+### Step 2 - Vercel (the web app)
+
+1. vercel.com -> **Add New** -> **Project** -> import the same GitHub repo.
+2. **Set Root Directory to `frontend`.** This is essential; the repo root is a
+   monorepo and Vercel must build only the frontend.
+3. Framework preset: **Vite** (detected automatically from `frontend/vercel.json`).
+4. Add environment variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `VITE_API_BASE_URL` | `https://<your-service>.onrender.com/api` - include `/api` |
+   | `VITE_SUPABASE_URL` | Supabase -> Settings -> API -> Project URL |
+   | `VITE_SUPABASE_ANON_KEY` | Supabase -> Settings -> API -> **anon public** key only |
+
+   `VITE_` variables are inlined into the browser bundle at build time. Only the
+   anon key may appear here - never a service_role key, a database URL, or a
+   provider key.
+
+5. Deploy and note the URL, e.g. `https://dukaansaathi.vercel.app`.
+
+### Step 3 - Close the loop
+
+1. **Render** -> your service -> Environment: set
+   `FRONTEND_URL` to the Vercel URL and
+   `CORS_ALLOWED_ORIGINS` to that same URL.
+   Save; Render redeploys automatically.
+2. **Supabase** -> Authentication -> URL Configuration:
+   - Site URL: the Vercel URL
+   - Redirect URLs: add `https://<vercel-url>/auth/customer` and
+     `http://localhost:5173/auth/customer`
+3. **Google Cloud Console** -> APIs & Services -> Credentials -> your OAuth client:
+   add `https://<vercel-url>/auth/customer` to the authorised redirect URIs if you
+   manage the client there. If Supabase owns the Google client, only step 2 applies.
+
+### Step 4 - Smoke test
+
+1. `https://<your-service>.onrender.com/api/health` -> `{"status":"ok"}`
+2. `https://<your-service>.onrender.com/api/health/features` -> shows which
+   integrations are configured. Anything `false` genuinely has no credentials.
+3. Open the Vercel URL. The directory should list the demo shops.
+4. Open a shop, send a chat message, and confirm a reply arrives.
+5. Sign in with Google and place a test order.
+
+### Free-plan limitations to expect
+
+- **Cold starts.** Render free instances sleep after ~15 minutes idle and take
+  ~50 seconds to wake. The first request after a quiet period feels broken but
+  is not.
+- **Shared CPU and 512 MB RAM.** The assistant call already takes tens of
+  seconds; on a cold free instance it will be slower.
+- **In-memory rate limiting.** Correct for the single free instance. If you ever
+  scale to more than one, the effective limit multiplies and you need a shared
+  store.
+- **No automatic migrations.** Run `npm --prefix backend run db:migrate` from
+  your machine against the Supabase direct URL whenever the schema changes.
+
 ## 11. Known deployment limitations
 
 - **Rate limiting is in-memory.** Correct for one Render instance; if you scale
