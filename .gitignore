@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------------
+# DukaanSaathi
+# ---------------------------------------------------------------------------
+
+# Secrets and local environment. Real values live only in the local .env files
+# and in Render / Vercel environment settings. Never commit them.
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env.local
+frontend/.env
+Keys/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+frontend/dist/
+backend/dist/
+.vercel
+.render
+
+# Logs and local test output
+*.log
+*e2e-out.txt
+npm-debug.log*
+backend/prisma/dev.db*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Test coverage
+coverage/
+
+# Large sandbox artefacts and local archives - never part of the project
+npm-cache/
+unsloth-tmp/
+.unsloth_attachments/
+*.7z
+*.zip
+
+# TypeScript incremental build cache
+*.tsbuildinfo

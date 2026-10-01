@@ -1,0 +1,73 @@
+# Render blueprint for the DukaanSaathi API.
+#
+# This file describes the web service; it has NOT been applied to a real Render
+# account. Secret values are intentionally absent: `sync: false` makes Render
+# prompt for them in the dashboard, so nothing sensitive lives in git.
+#
+# Docs: docs/DEPLOYMENT.md
+
+services:
+  - type: web
+    name: dukaansaathi-api
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: backend
+    branch: main
+    autoDeploy: true
+    # Prisma's client must be generated before TypeScript compiles, because the
+    # generated types are what tsc checks against.
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # --- Database -------------------------------------------------------
+      # DATABASE_URL: Supabase pooled connection string (port 6543).
+      # DIRECT_URL:   Supabase direct connection string (port 5432). Prisma
+      #               fails with P1012 if this is empty, which blocks
+      #               `prisma migrate deploy`.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+
+      # --- Supabase Auth --------------------------------------------------
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      # Only needed for legacy HS256 projects.
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+
+      # --- Frontend / CORS ------------------------------------------------
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+      # --- DeepSeek (only LLM provider) -----------------------------------
+      # DEEPSEEK_MODEL must be the current official Flash model id. It is left
+      # unset on purpose: see docs/DEPLOYMENT.md section 8.
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        sync: false
+
+      # --- Sarvam speech --------------------------------------------------
+      # Keys 1..3 are tried in order; only a 401/403 moves to the next key.
+      - key: SARVAM_API_KEY_1
+        sync: false
+      - key: SARVAM_API_KEY_2
+        sync: false
+      - key: SARVAM_API_KEY_3
+        sync: false
+
+      # --- Resend email ---------------------------------------------------
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

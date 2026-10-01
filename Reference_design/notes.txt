@@ -1,0 +1,69 @@
+ONBOARDING AND LANDING PAGE — IMPLEMENTATION NOTES
+
+Use the provided reference images as the visual direction. Keep the clean, mobile-first layout, purple accent color, rounded cards, large touch targets, and strong visual hierarchy. Apply the following flow and content corrections.
+
+GOAL
+
+Create a clear entry point for customers and business owners. Customers should be able to ask store questions without creating an account. Business owners need an account to register and manage their store.
+
+LANDING / ROLE SELECTION
+
+1. Show the app name: DukaanSaathi.
+2. Add the tagline: “Your store, in every language.”
+3. Provide a language selector for English, বাংলা, and हिन्दी. Use the selected language for interface labels, instructions, and validation messages.
+4. Present two clear actions:
+   - “Explore as a customer”
+   - “Set up my business”
+5. Do not require customers to sign up or log in just to browse stores or ask questions.
+
+CUSTOMER FLOW
+
+1. “Explore as a customer” opens the customer experience directly, without mandatory registration.
+2. Do not show customer registration as a required step.
+3. Customer accounts may be added later as an optional feature; they are not required for the MVP.
+
+BUSINESS FLOW
+
+1. “Set up my business” opens business sign-up or login.
+2. Keep business authentication separate from customer browsing.
+3. For the MVP, use email and password for business accounts. Do not show Google sign-in unless it is fully implemented and works consistently.
+4. After account creation, collect business details in a separate setup step. Do not combine all account and store setup fields into one long form.
+5. Store setup should collect:
+   - Business name
+   - Primary business category
+   - Business address
+   - Optional map pin/location
+6. Allow a manually entered address. Selecting a map location must be optional.
+7. Use the previously agreed business categories and include “Other / mixed retail” as a clear fallback.
+
+LOGIN AND REGISTRATION SCREEN CORRECTIONS
+
+1. Fix the business login reference screen: its top heading currently says “Business Registration” while its main heading says “Business Login.” Make all headings and labels match the screen’s purpose.
+2. Keep sign-up and login actions easy to distinguish:
+   - New business owner: “Create business account”
+   - Existing business owner: “Log in”
+3. Avoid duplicate or conflicting generic login screens. Make sure all links route to the correct business login, business registration, or customer experience.
+
+ACCESSIBILITY AND TRUST
+
+1. Keep the interface usable on small mobile screens and with an on-screen keyboard.
+2. Use persistent labels for form fields; do not rely only on placeholder text.
+3. Provide clear required-field indicators, validation messages, and loading/error states.
+4. Keep text and controls readable, with adequate contrast and large touch targets.
+5. Do not claim “secure” or “encrypted” unless the implementation actually supports that claim.
+
+SCOPE
+
+Do not add mandatory customer accounts, payment features, map-based address requirements, or unfinished third-party sign-in options. The business product catalog, store hours, and FAQ setup will be handled in later onboarding steps.
+
+EXPECTED HIGH-LEVEL FLOW
+
+Landing / choose language
+  -> Explore as a customer
+  -> Customer experience, no account required
+
+Landing / choose language
+  -> Set up my business
+  -> Business sign-up or login
+  -> Business profile setup
+  -> Later business setup steps

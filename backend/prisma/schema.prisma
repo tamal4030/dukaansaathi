@@ -1,0 +1,393 @@
+// DukaanSaathi - PostgreSQL schema (Prisma).
+// Single-owner businesses in the MVP, but membership is modelled through
+// BusinessMember so staff roles can be added later without a rewrite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  BUSINESS_OWNER
+  ADMIN
+}
+
+enum BusinessCategory {
+  GROCERY_DAILY_ESSENTIALS
+  FOOD_BEVERAGES
+  FASHION_TEXTILES
+  ELECTRONICS_APPLIANCES
+  HEALTH_PERSONAL_CARE
+  HOME_HARDWARE
+  BOOKS_STATIONERY_GIFTS_OTHER
+}
+
+enum BusinessRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum Availability {
+  AVAILABLE
+  OUT_OF_STOCK
+  UNKNOWN
+}
+
+enum ConversationStatus {
+  OPEN
+  RESOLVED
+}
+
+enum MessageRole {
+  CUSTOMER
+  ASSISTANT
+  SYSTEM
+}
+
+enum MessageSource {
+  TEXT
+  VOICE
+}
+
+enum FulfillmentType {
+  PICKUP
+  DELIVERY
+}
+
+enum OrderStatus {
+  NEW
+  ACCEPTED
+  PREPARING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  ORDER_CREATED_BUSINESS
+  ORDER_STATUS_CUSTOMER
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// Mirrors a Supabase Auth user. `authUserId` is the Supabase `sub` claim.
+model UserProfile {
+  id                    String    @id @default(uuid())
+  authUserId            String    @unique
+  email                 String?
+  fullName              String?
+  phone                 String?
+  locale                String    @default("en")
+  role                  UserRole  @default(CUSTOMER)
+  signInProvider        String?
+  /// Customer opt-in for order-status emails. Private account preference.
+  emailNotificationsOptIn Boolean @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  businesses     BusinessMember[]
+  ownedBusinesses Business[]       @relation("BusinessOwner")
+  orders         Order[]
+  reviews        OrderReview[]
+  conversations  Conversation[]
+  recentBusiness RecentBusiness[]
+  statusChanges  OrderStatusEvent[]
+
+  @@index([role])
+}
+
+model BusinessMember {
+  id         String       @id @default(uuid())
+  businessId String
+  userId     String
+  role       BusinessRole @default(OWNER)
+  createdAt  DateTime     @default(now())
+
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId])
+  @@index([userId])
+}
+
+model Business {
+  id          String           @id @default(uuid())
+  ownerId     String
+  name        String
+  slug        String           @unique
+  category    BusinessCategory
+  description String?
+
+  // Public contact / location information (safe to display).
+  publicPhone   String?
+  publicEmail   String?
+  addressLine   String?
+  city          String?
+  state         String?
+  pincode       String?
+  latitude      Float?
+  longitude     Float?
+
+  // Store information used by the assistant and the storefront.
+  pickupEnabled     Boolean  @default(true)
+  deliveryEnabled   Boolean  @default(false)
+  deliveryNotes     String?
+  paymentMethods    String[] @default([])
+  returnPolicy      String?
+  assistantNotes    String?
+  /// Lowercased name + category + city used for keyword search.
+  searchText        String   @default("")
+
+  isActive Boolean @default(true)
+  isPublic Boolean @default(true)
+
+  /// Business opt-in for "new order" emails.
+  emailNotificationsOptIn Boolean @default(true)
+  emailNotificationsEmail String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner         UserProfile    @relation("BusinessOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members       BusinessMember[]
+  hours         BusinessHour[]
+  faqs          BusinessFaq[]
+  products      Product[]
+  conversations Conversation[]
+  orders        Order[]
+  reviews       OrderReview[]
+  recentVisits  RecentBusiness[]
+
+  @@index([ownerId])
+  @@index([category, isActive])
+  @@index([name])
+  @@index([isActive, isPublic])
+  @@index([searchText])
+}
+
+model BusinessHour {
+  id         String  @id @default(uuid())
+  businessId String
+  /// 0 = Sunday ... 6 = Saturday
+  dayOfWeek  Int
+  isClosed   Boolean @default(false)
+  openTime   String?
+  closeTime  String?
+  note       String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, dayOfWeek])
+  @@index([businessId])
+}
+
+model BusinessFaq {
+  id         String   @id @default(uuid())
+  businessId String
+  question   String
+  answer     String
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, isActive])
+}
+
+model Product {
+  id           String       @id @default(uuid())
+  businessId   String
+  name         String
+  description  String?
+  category     String?
+  price        Decimal      @db.Decimal(10, 2)
+  currency     String       @default("INR")
+  availability Availability @default(UNKNOWN)
+  aliases      String[]     @default([])
+  searchText   String       @default("")
+  isArchived   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  business  Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderItem OrderItem[]
+
+  @@index([businessId, isArchived])
+  @@index([businessId, availability])
+  @@index([businessId, category])
+  @@index([searchText])
+}
+
+/// Server-side sync of a signed-in customer's recently visited businesses.
+/// Guests keep this list in the browser only.
+model RecentBusiness {
+  id             String   @id @default(uuid())
+  userId         String
+  businessId     String
+  lastAccessedAt DateTime @default(now())
+
+  user     UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId, lastAccessedAt])
+}
+
+model Conversation {
+  id           String             @id @default(uuid())
+  businessId   String
+  userId       String?
+  /// Server-issued, unguessable token that authorises a guest conversation.
+  guestToken   String?            @unique
+  status       ConversationStatus @default(OPEN)
+  customerLocale String           @default("en")
+  lastMessageAt DateTime          @default(now())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  business Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     UserProfile?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages Message[]
+  feedback ConversationFeedback?
+
+  @@index([businessId, status])
+  @@index([userId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  language       String?
+  source         MessageSource @default(TEXT)
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model ConversationFeedback {
+  id             String   @id @default(uuid())
+  conversationId String   @unique
+  rating         Int
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id         String @id @default(uuid())
+  /// Human readable code shown to the customer and the merchant.
+  orderCode  String @unique
+  businessId String
+  customerId String
+
+  fulfillment   FulfillmentType
+  status        OrderStatus     @default(NEW)
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  deliveryAddress String?
+  notes         String?
+
+  subtotal Decimal @db.Decimal(10, 2)
+  total    Decimal @db.Decimal(10, 2)
+  currency String  @default("INR")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business     Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer     UserProfile        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items        OrderItem[]
+  statusEvents OrderStatusEvent[]
+  review       OrderReview?
+  notifications NotificationLog[]
+
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model OrderItem {
+  id         String  @id @default(uuid())
+  orderId    String
+  productId  String?
+  /// Snapshots keep historical orders readable even if a product changes.
+  nameSnapshot      String
+  unitPriceSnapshot Decimal @db.Decimal(10, 2)
+  quantity          Int
+  lineTotal         Decimal @db.Decimal(10, 2)
+  createdAt         DateTime @default(now())
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderStatusEvent {
+  id              String      @id @default(uuid())
+  orderId         String
+  status          OrderStatus
+  note            String?
+  changedByUserId String?
+  createdAt       DateTime    @default(now())
+
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy UserProfile? @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+}
+
+model OrderReview {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  businessId String
+  customerId String
+  rating     Int
+  comment    String?
+  tags       String[] @default([])
+  createdAt  DateTime @default(now())
+
+  order    Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer UserProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+}
+
+model NotificationLog {
+  id          String             @id @default(uuid())
+  orderId     String?
+  type        NotificationType
+  recipient   String
+  status      NotificationStatus
+  provider    String             @default("resend")
+  error       String?
+  createdAt   DateTime           @default(now())
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([createdAt])
+}
