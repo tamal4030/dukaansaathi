@@ -48,3 +48,6 @@ unsloth-tmp/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Temporary verification clones
+verify-clone/
