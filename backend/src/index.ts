@@ -16,6 +16,32 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  /**
+   * Guard against a pooled Supabase connection string pasted without its query
+   * parameters.
+   *
+   * Port 6543 is Supabase's Supavisor pooler in transaction mode, which does not
+   * support prepared statements. Prisma only switches to compatible behaviour
+   * when `pgbouncer=true` is present. Without it, parallel queries fail
+   * intermittently - reproduced locally as 6 failures in 8 attempts, and seen in
+   * production as HTTP 500s on any endpoint issuing more than one query at once.
+   *
+   * This warns rather than exits: a single query may still work, so refusing to
+   * start would be worse than starting with a loud warning.
+   */
+  const databaseUrl = env.databaseUrl;
+  const isPoolerPort = /:6543\//.test(databaseUrl);
+  const hasPgbouncerFlag = /[?&]pgbouncer=true/.test(databaseUrl);
+  if (isPoolerPort && !hasPgbouncerFlag) {
+    logger.warn(
+      'DATABASE_URL points at the Supabase pooler (port 6543) but is missing ' +
+        '"?pgbouncer=true". Parallel queries will fail intermittently. Append ' +
+        '"?pgbouncer=true&connection_limit=10&pool_timeout=20" to DATABASE_URL. ' +
+        'See docs/DEPLOYMENT.md.',
+      { missingParams: ['pgbouncer=true', 'connection_limit', 'pool_timeout'] },
+    );
+  }
+
   const prisma = getPrisma();
 
   try {
