@@ -55,7 +55,14 @@ export function buildCorsOptions(allowAllOrigins = false): CorsOptions {
     },
     credentials: false,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    // X-Guest-Token is a custom header, so the browser sends a CORS preflight
+    // (OPTIONS) before any guest-chat request. If it is not listed here the
+    // preflight fails and the browser blocks the actual request, which surfaces
+    // in the UI as "The server could not be reached".
+    //
+    // This cannot be caught by server-side tests: Node's fetch does not perform
+    // preflight, so only a real browser exercises it.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Guest-Token'],
     maxAge: 86400,
   };
 }
